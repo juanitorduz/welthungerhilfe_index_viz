@@ -1,4 +1,4 @@
-# Welthungerhilfe Visualization Project 
+# Welthungerhilfe-Index Visualization Project 
 
 This repository contains `R` code to:
 

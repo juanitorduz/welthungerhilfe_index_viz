@@ -6,4 +6,4 @@ This repository contains `R` code to:
  
  2. Create Shiny App to visualize the index and related variables. 
  
-[g](map.html)
+![f](map.html)

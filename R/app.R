@@ -1,8 +1,9 @@
 ## app.R ##
 
-library(plotly)
+library(feather)
 library(glue)
 library(magrittr)
+library(plotly)
 library(tidyverse)
 
 library(DT)
@@ -14,11 +15,22 @@ setwd(dir = "/Users/juanitorduz/Documents/welthungerhilfe_index_viz")
 
 source(file = "./R/generate_maps.R")
 
+#-----------#
+# Load Data #
+#-----------#
+
 all_data <- readRDS(file = "Data/all_data.rds")
 
 var_names <- all_data %>% pull(Variable) %>% unique
 
 years <- colnames(all_data) %>% setdiff(y = c("Variable", "Country", "Code"))
+
+all_map_data  <- read_feather(path = "Data/all_map_data.feather")
+
+
+#-----------#
+# Shiny App #
+#-----------#
 
 ui <- dashboardPage(
   
@@ -87,11 +99,13 @@ ui <- dashboardPage(
   )
 )
 
+
 server <- function(input, output) { 
   
   output$map <- renderPlotly({
-
-    generate_map_var_year(var_name = input$select_variable_map, 
+    
+    generate_map_var_year2(all_map_data = all_map_data,
+                          var_name = input$select_variable_map, 
                           year = input$select_year_map, 
                           color_scale = color_scale, 
                           save_map = FALSE)

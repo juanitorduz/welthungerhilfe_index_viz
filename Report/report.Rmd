@@ -1,0 +1,307 @@
+---
+title: 'GHI Visualization Report'
+subtitle: 'Version 2.0'
+author: 'Dr. Juan Orduz'
+date: '`r format(Sys.time(), "%d.%m.%Y")`'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(knitr)
+library(plotly)
+library(glue)
+library(magrittr)
+library(tidyverse)
+
+Sys.setlocale("LC_CTYPE", "en_US.UTF-8")
+
+MAIN.DIR <<- '/Users/juanorduz/Dropbox/Data Analysis Tutorials/GHI_Viz_Project'
+```
+
+```{r}
+# Define language vector. 
+# TODO: Include languaje dependency.
+LANGUAGES <<- c('EN', 'DE')
+
+# Get all variable names.
+all.var.names <- readxl::excel_sheets(path = glue(MAIN.DIR, '/Data/data_transf.xlsx'))
+
+var.name <- all.var.names[1]
+
+var.name.sym <- rlang::sym(var.name)
+
+print(all.var.names)
+```
+Macintosh HD⁩ ▸ ⁨Users⁩ ▸ ⁨juanitorduz⁩ ▸ ⁨Dropbox⁩ ▸ ⁨Data Analysis Tutorials⁩ ▸ ⁨GHI_Viz_Project⁩ ▸ ⁨Data⁩
+```{r}
+GetVariableDataFrame <- function(var.name) {
+  #' Constructs variable data frame containing the variable data 
+  #' for all the years plus a country code for all countries in thw world. 
+  #'
+  #' @param var.name Variable name. 
+  #' @return Variable data frame.  
+  
+  # Read raw data. 
+  raw.df <- readxl::read_excel(path = glue(MAIN.DIR, '/Data/data_transf.xlsx'), sheet = var.name) %>% mutate_all(.funs = as.character)
+  # Round numbers to 2 digits (when possible).
+  data.df <- raw.df %>% mutate_all(.funs = ~ if_else(condition = (.x %>% as.numeric %>% is.na), 
+                                                     true = .x, 
+                                                     false = .x %>% as.numeric %>% round(digits = 2) %>% as.character))
+  
+  # Read in country codes for countries in the raw data. 
+  country.codes <- readxl::read_excel(path = glue(MAIN.DIR, '/Data/country_codes.xlsx'))
+  # Add country codes for these countries. 
+  data.df <- left_join(x = data.df, y = country.codes, by = 'Country') 
+  # Read country codes for all countries in the world (we need them all for the plot). 
+  raw.country.codes <- readxl::read_excel(path = glue(MAIN.DIR, '/Data/country_codes_raw.xlsx'))
+  # Calculate the countries which are not in the raw data. 
+  additional.countries <- anti_join(x = raw.country.codes, y = data.df %>% select(Country, Code), by = 'Code')
+  # Add these missing countries to have a complete coverage of the world.
+  data.df %<>% bind_rows(additional.countries) %>% arrange(Country)
+  
+  return(data.df)
+  
+}
+
+
+data.df <- GetVariableDataFrame(var.name = var.name)
+
+data.df %>% head #%>% kable
+```
+
+```{r}
+EncodeRank <- function(y){
+  #' From a data vector, define the corresponding element-wise categories.
+  #'
+  #' @param y Data vector. 
+  #' @return Category vector. 
+  
+  y %>% map_chr(.f = function(x) {
+    
+    if (is.na(x)) { return('No Data') }
+    
+    n <- x %>% as.numeric 
+    
+    if (is.na(n)) {
+      
+      if (x == '<5') {return('Insufficient Data')} 
+      
+      else { 'No Data (Risky)' }
+      
+    } else {
+      
+      if (n >= 50) { return('Extremely Alarming') }
+      else if (n >= 35) { return('Alarming') }
+      else if (n >= 20) { return('Serious') }
+      else if (n >= 10) { return('Moderate') } 
+      else return('Low')
+      
+    }
+  })
+}
+
+
+GetVariableYearDataFrame <- function(var.name.sym, data.df, year) {
+  #' Constructs variable data frame for a given year.
+  #'
+  #' @param var.name.sym Variable (symbol) name. 
+  #' @param data.df Output of the GetVariableDataFrame function.
+  #' @param year Year to be considered.
+  #' @return Variable-year dat frame. 
+  
+  year.df <- data.df %>% select(Country, year, Code) %>% 
+                         rename(!!var.name.sym := year) %>% 
+                         mutate(Rank = EncodeRank(!!var.name.sym)) %>% 
+                         mutate(Rank = Rank %>% as.factor) %>% 
+                         mutate(Rank = Rank %>% fct_relevel(... = c('Extremely Alarming', 
+                                                                    'Alarming', 'Serious', 
+                                                                    'Moderate', 'Low', 
+                                                                    'Insufficient Data', 
+                                                                    'No Data (Risky)', 
+                                                                    'No Data')))
+  return(year.df)
+}
+
+# Get all years.
+years <- colnames(data.df)[-1]
+# Set specific year. 
+year <- years[4]
+
+year.df <- GetVariableYearDataFrame(var.name.sym = var.name.sym, data.df = data.df, year = year)
+
+# year.df %>% head #%>% kable
+```
+
+```{r}
+ConstructMapDataFrame <- function(var.name.sym, year.df) {
+  #' Constructs the data frame to generate the map.
+  #'
+  #' @param var.name.sym Variable (symbol) name.
+  #' @param year.df Output of the GetVariableYearDataFrame function.
+  #' @return Data frame containing polygon data (lat -lon) to draw the maps
+  
+  library(maps)
+
+  # Get world map data.
+  map.data <- map_data(map = 'world')
+  # Generate ISO Code and merge with year.df.
+  map.data %<>% mutate(Code = iso.alpha(x = region, n = 3)) %>% 
+                left_join(y = year.df, by = 'Code')
+  # Define country Info for visualization.
+  map.data %<>% mutate(Info = if_else(condition = is.na(!!var.name.sym), 
+                                      true = str_c('\n County : ', Country), 
+                                      false = str_c('\n County : ', Country, ' \n', 
+                                                    as.character(var.name.sym), ': ', !!var.name.sym)))
+
+  detach('package:maps', unload=TRUE)
+  
+  return(map.data)
+}
+
+
+map.data <- ConstructMapDataFrame(var.name.sym = var.name.sym, year.df = year.df)
+
+map.data %>% head #%>% kablem
+```
+
+```{r, fig.width= 10}
+# Define color scale. 
+# TODO: Get color code 'for No Data (Risky)'
+color.scale <- c('No Data' = '#ffffff', 
+                 'Insufficient Data' = '#c6c6c6', 
+                 'No Data (Risky)' = '#A0522D', 
+                 'Extremely Alarming' = '#990033', 
+                 'Alarming' = '#ff9900', 
+                 'Serious' = '#ffcc00', 
+                 'Moderate' = '#99cc99', 
+                 'Low' = '#339933')
+
+GenerateMap <- function(map.data, var.name, year, color.scale, save.map = FALSE) {
+  #' Generate map.
+  #'
+  #' @param map.data Output of the ConstructMapDataFrame function.
+  #' @param var.name Variable name. 
+  #' @param year Year to be considered.
+  #' @param color.scale Color scale for the different categories. 
+  #' @param save.map Boolean option to save mas as .html.
+  #' @return Plotly worls map for the correspinding variable-year.
+  
+  plt <- map.data %>% 
+         # Remove counntries with no information at all. 
+         filter(! is.na(Info)) %>% 
+         # Definne plot object. 
+         ggplot(mapping = aes(x = long, y = lat, group = group)) + 
+         # Customize theme. 
+         theme(
+            
+           panel.background = element_rect(fill = 'lightblue',
+                                           colour = 'lightblue',
+                                           size = 0.5,
+                                           linetype = 'solid'),
+            
+           panel.grid.major = element_line(size = 0.5, 
+                                           linetype = 'solid',
+                                           colour = 'lightblue'), 
+            
+           panel.grid.minor = element_line(size = 0.25, 
+                                           linetype = 'solid',
+                                           colour = 'lightblue'), 
+           
+           panel.border = element_rect(colour = 'black', fill = NA, size = 2),
+            
+           # Set color as in Shiny App background. 
+           plot.background = element_rect(fill = '#ECF0F5')
+            
+          ) +
+          # Draw map: Color by rank. 
+          geom_polygon(mapping = aes(fill = Rank, label = Info), 
+                       color = 'black',
+                       size = 0.1) +
+          # Set color scale.
+          scale_fill_manual(values = color.scale) + 
+          # Add tittle and axis labels. 
+          ggtitle(label = glue('{var.name} : {year}')) + xlab(label = '') + ylab(label = '') 
+  
+  plt.ly <- plt #%>% ggplotly
+  
+  if (save.map) { htmlwidgets::saveWidget(widget = plt.ly, file = 'map.html') }
+  
+  
+  return(plt.ly)
+}
+
+
+GenerateMap(map.data = map.data, var.name = var.name, year = year, color.scale = color.scale, save.map = FALSE)
+```
+
+```{r}
+GenerateMapVarYear <- function(var.name, year, color.scale, save.map = FALSE) {
+  
+  var.name.sym <- rlang::sym(var.name)
+  
+  data.df <- GetVariableDataFrame(var.name = var.name)
+  
+  year.df <- GetVariableYearDataFrame(var.name.sym = var.name.sym, 
+                                      data.df = data.df, 
+                                      year = year)
+  
+  map.data <- ConstructMapDataFrame(var.name.sym = var.name.sym, 
+                                    year.df = year.df)
+  
+  plt.ly <- GenerateMap(map.data = map.data, 
+                        var.name = var.name, 
+                        year = year, 
+                        color.scale = color.scale, 
+                        save.map = save.map)
+  
+  return(plt.ly)
+}
+
+
+LANGUAGES <<- c('EN')
+
+maps.list <- vector(mode = 'list')
+
+# Get all variable names.
+all.var.names <- readxl::excel_sheets(path = glue(MAIN.DIR, '/Data/data_transf.xlsx'))
+
+for(var.name in all.var.names){
+  
+  years <- GetVariableDataFrame(var.name = var.name) %>% colnames %>% 
+                                                         as.numeric %>% 
+                                                         na.omit %>% 
+                                                         as.character
+  for(year in years){
+    
+    maps.list[[var.name]][[year]] <- GenerateMapVarYear(var.name = var.name, 
+                                                        year = year, 
+                                                        color.scale = color.scale, 
+                                                        save.map = FALSE)
+  }
+} 
+
+all.data <- all.var.names %>% map_df(.f = ~ GetVariableDataFrame(var.name = .x) %>% add_column(Variable = .x, .before = 'Country' ))
+
+saveRDS(object = maps.list, file = glue(MAIN.DIR, '/Data/maps_list2.rds'))
+#saveRDS(object = all.data, file = glue(MAIN.DIR, '/Data/all_data.rds'))
+```
+
+```{r, fig.width=15}
+
+plot.list <- htmltools::tagList()
+
+for(var.name in all.var.names) {
+  
+  for(year in years) {
+    
+   plot.list[[var.name]][[year]] <- maps.list[[var.name]][[year]]
+    
+  }
+}
+
+plot.list
+```
+

@@ -11,14 +11,11 @@ library(glue)
 library(magrittr)
 library(tidyverse)
 
-# Set working directory. 
-setwd(dir = "/Users/juanitorduz/Documents/welthungerhilfe_index_viz")
-
 # Set input file name. 
-input_file_name <- "GHI2018_data.xlsx"
+# input_file_name <- "GHI2018_data.xlsx"
 
 # Get variable names (= excel sheet names). 
-var_names <- readxl::excel_sheets(path = glue("Data/{input_file_name}"))
+# var_names <- readxl::excel_sheets(path = glue("Data/{input_file_name}"))
 
 #-------------------#
 # Support Functions #
@@ -207,6 +204,21 @@ generate_map <- function(map_data_df, var_name, year, color_scale, save_map = FA
 }
 
 
+generate_map_data_var_year <- function(var_name, year) {
+  
+  var_name_sym <- rlang::sym(var_name)
+  
+  data_df <- get_variable_data_frame(var_name = var_name)
+  
+  year_df <- get_variable_year_df(var_name_sym = var_name_sym, data_df = data_df, year = year)
+  
+  map_data_df <- construct_map_df(var_name_sym = var_name_sym, year_df = year_df)
+  
+  map_data_df %<>% mutate(Year = year, Variable = var_name)
+  
+  return(map_data_df)
+}
+
 #---------------#
 # Main Function #
 #---------------#
@@ -237,6 +249,20 @@ generate_map_var_year <- function(var_name, year, color_scale, save_map = FALSE)
   return(plt_ly)
 }
 
+
+generate_map_var_year2 <- function(all_map_data, var_name, year, color_scale, save_map = FALSE) {
+  
+  map_data_df <- all_map_data %>% filter(Variable == var_name, Year == year)
+  
+  plt_ly <- generate_map(map_data_df = map_data_df,
+                         var_name = var_name, 
+                         year = year, 
+                         color_scale = color_scale, 
+                         save_map = save_map)
+  
+  return(plt_ly)
+}
+
 #----------------------------#
 # Generate RDS with All Data #
 #----------------------------#
@@ -245,6 +271,22 @@ generate_map_var_year <- function(var_name, year, color_scale, save_map = FALSE)
 #                                         add_column(Variable = .x, .before = "Country"))
 # 
 # saveRDS(object = all_data, file = "Data/all_data.rds")
+
+
+
+# all_map_data_list <- vector(mode = "list")
+# 
+# for (var_name in var_names) {
+#   
+#   for (year in years) {
+#     
+#     all_map_data_list[[var_name]][[year]] <- generate_map_data_var_year(var_name = var_name, year = year)
+#     
+#   }
+# }
+# 
+# all_map_data <- all_map_data_list %>% reduce(.f = ~ bind_rows(.x, .y))
+
 
 #---------#
 # Example #

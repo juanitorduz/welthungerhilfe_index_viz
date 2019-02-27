@@ -11,9 +11,7 @@ library(shiny)
 library(shinydashboard)
 library(shinycssloaders)
 
-setwd(dir = "/Users/juanitorduz/Documents/welthungerhilfe_index_viz")
-
-source(file = "./R/generate_maps.R")
+source(file = "generate_maps.R")
 
 #-----------#
 # Load Data #
@@ -105,10 +103,10 @@ server <- function(input, output) {
   output$map <- renderPlotly({
     
     generate_map_var_year2(all_map_data = all_map_data,
-                          var_name = input$select_variable_map, 
-                          year = input$select_year_map, 
-                          color_scale = color_scale, 
-                          save_map = FALSE)
+                           var_name = input$select_variable_map, 
+                           year = input$select_year_map, 
+                           color_scale = color_scale, 
+                           save_map = FALSE)
 
   })
   

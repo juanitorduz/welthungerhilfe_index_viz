@@ -11,14 +11,11 @@ library(glue)
 library(magrittr)
 library(tidyverse)
 
-# Set working directory. 
-setwd(dir = "/Users/juanitorduz/Documents/welthungerhilfe_index_viz")
-
 # Set input file name. 
-input_file_name <- "GHI2018_data.xlsx"
+# input_file_name <- "GHI2018_data.xlsx"
 
 # Get variable names (= excel sheet names). 
-var_names <- readxl::excel_sheets(path = glue("Data/{input_file_name}"))
+# var_names <- readxl::excel_sheets(path = glue("Data/{input_file_name}"))
 
 #-------------------#
 # Support Functions #
@@ -222,18 +219,6 @@ generate_map_data_var_year <- function(var_name, year) {
   return(map_data_df)
 }
 
-
-# all_map_data_list <- vector(mode = "list")
-# 
-# for (var_name in var_names) {
-#   
-#   for (year in years) {
-#     
-#     all_map_data_list[[var_name]][[year]] <- generate_map_data_var_year(var_name = var_name, year = year)
-#     
-#   }
-# }
-
 #---------------#
 # Main Function #
 #---------------#
@@ -286,6 +271,22 @@ generate_map_var_year2 <- function(all_map_data, var_name, year, color_scale, sa
 #                                         add_column(Variable = .x, .before = "Country"))
 # 
 # saveRDS(object = all_data, file = "Data/all_data.rds")
+
+
+
+# all_map_data_list <- vector(mode = "list")
+# 
+# for (var_name in var_names) {
+#   
+#   for (year in years) {
+#     
+#     all_map_data_list[[var_name]][[year]] <- generate_map_data_var_year(var_name = var_name, year = year)
+#     
+#   }
+# }
+# 
+# all_map_data <- all_map_data_list %>% reduce(.f = ~ bind_rows(.x, .y))
+
 
 #---------#
 # Example #
